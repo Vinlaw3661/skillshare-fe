@@ -3,17 +3,18 @@ import { BASE_PATH } from "@/api/base"
 import type { SessionCreateResponse } from "@/api"
 
 interface PageProps {
-  params: {
+  params: Promise<{
     sessionId: string
-  }
+  }>
 }
 
 export default async function Page({ params }: PageProps) {
+  const { sessionId } = await params
   let initialSession: SessionCreateResponse | null = null
   let initialError: string | null = null
 
   try {
-    const response = await fetch(`${BASE_PATH}/sessions/${params.sessionId}`, {
+    const response = await fetch(`${BASE_PATH}/sessions/${sessionId}`, {
       cache: "no-store",
     })
 
@@ -31,7 +32,7 @@ export default async function Page({ params }: PageProps) {
 
   return (
     <SessionDetailPage
-      sessionId={params.sessionId}
+      sessionId={sessionId}
       initialSession={initialSession}
       initialError={initialError}
     />
