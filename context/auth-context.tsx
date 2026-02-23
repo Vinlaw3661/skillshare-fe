@@ -1,6 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { UsersApi } from "@/api"
 
 /** TypeScript interface for login credentials */
 export interface UserLogin {
@@ -31,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Check for existing login session on mount (mock behavior)
+  // Check for existing login session on mount
   useEffect(() => {
     const token = localStorage.getItem("skillshare_jwt")
     if (token) {
@@ -40,46 +41,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false)
   }, [])
 
-  /** Placeholder login — logs credentials and simulates JWT storage */
+  /** Login via API */
   const onLogin = async (credentials: UserLogin): Promise<void> => {
-    console.log("[SkillShare Local] Login attempt:", {
-      email: credentials.email,
-      password: credentials.password,
-    })
-
-    // Simulate an API call delay
-    await new Promise((resolve) => setTimeout(resolve, 800))
-
-    // Simulate storing a JWT token
-    const mockToken = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${btoa(
-      JSON.stringify({ email: credentials.email, exp: Date.now() + 3600000 })
-    )}.mock_signature`
-
-    localStorage.setItem("skillshare_jwt", mockToken)
-    setIsAuthenticated(true)
-    console.log("[SkillShare Local] JWT stored successfully")
+    const api = new UsersApi()
+    try {
+      const response = await api.loginUser({
+        username_or_email: credentials.email,
+        password: credentials.password,
+      })
+      const token = response.data.access_token.replace(/^Bearer\\s+/i, "")
+      localStorage.setItem("skillshare_jwt", token)
+      setIsAuthenticated(true)
+    } catch (error) {
+      console.error("[SkillShare Local] Login failed", error)
+      localStorage.removeItem("skillshare_jwt")
+      setIsAuthenticated(false)
+      throw error
+    }
   }
 
-  /** Placeholder register — logs credentials and simulates account creation */
+  /** Register via API, then login */
   const onRegister = async (credentials: UserRegister): Promise<void> => {
-    console.log("[SkillShare Local] Register attempt:", {
-      email: credentials.email,
-      firstName: credentials.firstName,
-      lastName: credentials.lastName,
-      username: credentials.username,
-    })
+    const api = new UsersApi()
+    try {
+      await api.registerUser({
+        first_name: credentials.firstName,
+        last_name: credentials.lastName,
+        username: credentials.username,
+        email: credentials.email,
+        password: credentials.password,
+      })
 
-    // Simulate an API call delay
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    // Simulate storing a JWT token after registration
-    const mockToken = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${btoa(
-      JSON.stringify({ email: credentials.email, exp: Date.now() + 3600000 })
-    )}.mock_signature`
-
-    localStorage.setItem("skillshare_jwt", mockToken)
-    setIsAuthenticated(true)
-    console.log("[SkillShare Local] Account created and JWT stored")
+      const response = await api.loginUser({
+        username_or_email: credentials.email,
+        password: credentials.password,
+      })
+      const token = response.data.access_token.replace(/^Bearer\\s+/i, "")
+      localStorage.setItem("skillshare_jwt", token)
+      setIsAuthenticated(true)
+    } catch (error) {
+      console.error("[SkillShare Local] Registration failed", error)
+      localStorage.removeItem("skillshare_jwt")
+      setIsAuthenticated(false)
+      throw error
+    }
   }
 
   const onLogout = () => {
