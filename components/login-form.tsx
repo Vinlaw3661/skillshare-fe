@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, type FormEvent } from "react"
+import Link from "next/link"
 import { useAuth, type UserLogin, type UserRegister } from "@/context/auth-context"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -311,9 +312,11 @@ export function AuthenticatedView() {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <Button className="h-11 bg-primary text-primary-foreground hover:bg-primary/90">
-          <Users className="h-4 w-4" />
-          <span>Browse Sessions</span>
+        <Button asChild className="h-11 bg-primary text-primary-foreground hover:bg-primary/90">
+          <Link href="/sessions">
+            <Users className="h-4 w-4" />
+            <span>Browse Sessions</span>
+          </Link>
         </Button>
         <Button
           variant="outline"

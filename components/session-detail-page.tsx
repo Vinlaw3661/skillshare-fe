@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { SessionsApi, type SessionCreateResponse } from "@/api"
+import { Configuration, EnrollmentsApi, SessionsApi, type SessionCreateResponse } from "@/api"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -32,6 +32,11 @@ export function SessionDetailPage({
   const [session, setSession] = useState<SessionCreateResponse | null>(initialSession)
   const [isLoading, setIsLoading] = useState(!initialSession && !initialError)
   const [errorMessage, setErrorMessage] = useState<string | null>(initialError)
+  const [isEnrolling, setIsEnrolling] = useState(false)
+  const [enrollmentMessage, setEnrollmentMessage] = useState<string | null>(null)
+  const [enrollmentTone, setEnrollmentTone] = useState<"success" | "error" | "info">("info")
+  const [isEnrolled, setIsEnrolled] = useState(false)
+  const [isCheckingEnrollment, setIsCheckingEnrollment] = useState(false)
 
   useEffect(() => {
     let isActive = true
@@ -80,6 +85,53 @@ export function SessionDetailPage({
     }
   }, [sessionId, initialSession, initialError])
 
+  useEffect(() => {
+    let isActive = true
+
+    const checkEnrollment = async () => {
+      const token = localStorage.getItem("skillshare_jwt")
+      if (!token) {
+        if (isActive) {
+          setIsEnrolled(false)
+        }
+        return
+      }
+
+      setIsCheckingEnrollment(true)
+
+      try {
+        const api = new EnrollmentsApi(
+          new Configuration({
+            accessToken: token,
+          })
+        )
+        const response = await api.checkEnrollmentStatusEnrollmentsSessionsSessionIdCheckEnrollmentGet(
+          sessionId
+        )
+        if (isActive) {
+          setIsEnrolled(Boolean(response.data?.enrolled))
+        }
+      } catch (error) {
+        console.error("[SkillShare Local] Failed to check enrollment status", error)
+        if (isActive) {
+          setIsEnrolled(false)
+        }
+      } finally {
+        if (isActive) {
+          setIsCheckingEnrollment(false)
+        }
+      }
+    }
+
+    if (sessionId) {
+      checkEnrollment()
+    }
+
+    return () => {
+      isActive = false
+    }
+  }, [sessionId])
+
   if (isLoading) {
     return (
       <div className="flex min-h-svh items-center justify-center bg-background px-4 py-12">
@@ -116,6 +168,12 @@ export function SessionDetailPage({
     100,
     Math.round((session.enrolled_count / session.capacity) * 100)
   )
+  const isFull = session.enrolled_count >= session.capacity
+  const startTimestamp = new Date(session.start_time).getTime()
+  const hasStarted = Number.isNaN(startTimestamp) ? false : startTimestamp <= Date.now()
+  const normalizedStatus = session.status?.toLowerCase?.() ?? ""
+  const enrollmentClosed =
+    normalizedStatus.length > 0 && !["active", "open"].includes(normalizedStatus)
 
   const formatDate = (value: string) => {
     const parsed = new Date(value)
@@ -142,6 +200,108 @@ export function SessionDetailPage({
     if (!startLabel && !endLabel) return ""
     return `${startLabel} - ${endLabel}`
   }
+
+  const extractEnrollmentError = (error: unknown) => {
+    const anyError = error as any
+    const detail = anyError?.response?.data?.detail
+    if (Array.isArray(detail) && detail[0]?.msg) {
+      return detail[0].msg as string
+    }
+    if (typeof detail === "string") {
+      return detail
+    }
+    if (typeof anyError?.response?.data?.message === "string") {
+      return anyError.response.data.message
+    }
+    if (typeof anyError?.message === "string") {
+      return anyError.message
+    }
+    return "Unable to enroll in this session."
+  }
+
+  const handleEnroll = async () => {
+    setEnrollmentMessage(null)
+    setEnrollmentTone("info")
+
+    const token = localStorage.getItem("skillshare_jwt")
+    if (!token) {
+      setEnrollmentTone("error")
+      setEnrollmentMessage("Please sign in before enrolling in a session.")
+      return
+    }
+
+    if (isEnrolled) {
+      setEnrollmentTone("info")
+      setEnrollmentMessage("You are already enrolled in this session.")
+      return
+    }
+
+    if (isFull) {
+      setEnrollmentTone("error")
+      setEnrollmentMessage("This session is already at full capacity.")
+      return
+    }
+
+    if (hasStarted) {
+      setEnrollmentTone("error")
+      setEnrollmentMessage("This session has already started.")
+      return
+    }
+
+    if (enrollmentClosed) {
+      setEnrollmentTone("error")
+      setEnrollmentMessage("Enrollment is closed for this session.")
+      return
+    }
+
+    setIsEnrolling(true)
+
+    try {
+      const api = new EnrollmentsApi(
+        new Configuration({
+          accessToken: token,
+        })
+      )
+      await api.enrollInSessionEnrollmentsSessionsSessionIdEnrollPost(sessionId)
+      setIsEnrolled(true)
+      setEnrollmentTone("success")
+      setEnrollmentMessage("You're enrolled! We'll see you there.")
+      setSession((prev) =>
+        prev
+          ? {
+              ...prev,
+              enrolled_count: prev.enrolled_count + 1,
+            }
+          : prev
+      )
+    } catch (error) {
+      console.error("[SkillShare Local] Failed to enroll", error)
+      setEnrollmentTone("error")
+      setEnrollmentMessage(extractEnrollmentError(error))
+    } finally {
+      setIsEnrolling(false)
+    }
+  }
+
+  const enrollButtonDisabled =
+    isEnrolling || isCheckingEnrollment || isEnrolled || isFull || hasStarted || enrollmentClosed
+
+  const enrollButtonLabel = () => {
+    if (isEnrolling) return "Enrolling..."
+    if (isCheckingEnrollment) return "Checking enrollment..."
+    if (isEnrolled) return "You're enrolled"
+    if (isFull) return "Session full"
+    if (hasStarted) return "Session started"
+    if (enrollmentClosed) return "Enrollment closed"
+    return "Enroll in session"
+  }
+
+  const enrollmentMessageClass =
+    enrollmentTone === "error"
+      ? "border-destructive/40 text-destructive"
+      : enrollmentTone === "success"
+      ? "border-emerald-200 bg-emerald-50/60 text-emerald-700"
+      : "border-border/60 text-muted-foreground"
 
   return (
     <div className="relative min-h-svh bg-background px-4 py-12">
@@ -244,13 +404,26 @@ export function SessionDetailPage({
                 <CardDescription>Secure your spot and add it to your calendar.</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-3">
-                <Button className="h-11 bg-primary text-primary-foreground hover:bg-primary/90">
-                  <span>Enroll in session</span>
-                  <ArrowRight className="h-4 w-4" />
+                <Button
+                  className="h-11 bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={handleEnroll}
+                  disabled={enrollButtonDisabled}
+                >
+                  <span>{enrollButtonLabel()}</span>
+                  {isEnrolling || isCheckingEnrollment ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowRight className="h-4 w-4" />
+                  )}
                 </Button>
                 <Button variant="outline" className="h-11">
                   Message host
                 </Button>
+                {(enrollmentMessage || isEnrolled) && (
+                  <div className={`rounded-md border px-3 py-2 text-xs ${enrollmentMessageClass}`}>
+                    {enrollmentMessage ?? "You're enrolled in this session."}
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Enrollment closes once capacity is reached.
                 </p>
