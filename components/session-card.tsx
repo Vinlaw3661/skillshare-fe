@@ -1,33 +1,41 @@
-import Link from "next/link";
-import { Calendar, Clock, MapPin, Users, ArrowRight } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import type { Session } from "@/lib/mock-sessions";
-import { CATEGORY_COLORS } from "@/lib/mock-sessions";
-import { format, parse } from "date-fns";
+import Link from "next/link"
+import { Calendar, Clock, MapPin, Users, ArrowRight } from "lucide-react"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import type { SessionCreateResponse } from "@/api"
+import { format, parseISO } from "date-fns"
+
+const CATEGORY_COLORS: Record<string, string> = {
+  Technology: "bg-primary/10 text-primary border-primary/20",
+  Arts: "bg-rose-500/10 text-rose-700 border-rose-500/20",
+  Music: "bg-amber-500/10 text-amber-700 border-amber-500/20",
+  Cooking: "bg-orange-500/10 text-orange-700 border-orange-500/20",
+  Academics: "bg-teal-500/10 text-teal-700 border-teal-500/20",
+  Fitness: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",
+  Languages: "bg-sky-500/10 text-sky-700 border-sky-500/20",
+}
 
 function formatDate(dateStr: string) {
-  return format(parse(dateStr, "yyyy-MM-dd", new Date()), "EEE, MMM d, yyyy");
+  const parsed = parseISO(dateStr)
+  return Number.isNaN(parsed.getTime()) ? dateStr : format(parsed, "EEE, MMM d, yyyy")
 }
 
 function formatTime(timeStr: string) {
-  return format(parse(timeStr, "HH:mm", new Date()), "h:mm a");
+  const parsed = parseISO(timeStr)
+  return Number.isNaN(parsed.getTime()) ? timeStr : format(parsed, "h:mm a")
 }
 
 interface SessionCardProps {
-  session: Session;
+  session: SessionCreateResponse
 }
 
 export function SessionCard({ session }: SessionCardProps) {
-  const isFull = session.enrolled_count >= session.capacity;
-  const spotsLeft = session.capacity - session.enrolled_count;
+  const isFull = session.enrolled_count >= session.capacity
+  const spotsLeft = Math.max(session.capacity - session.enrolled_count, 0)
+  const categoryClass =
+    CATEGORY_COLORS[session.skill_category] ??
+    "bg-secondary text-secondary-foreground border-border"
 
   return (
     <Card className="group flex flex-col justify-between overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5">
@@ -36,10 +44,7 @@ export function SessionCard({ session }: SessionCardProps) {
           <CardTitle className="text-lg leading-snug font-bold text-balance">
             {session.title}
           </CardTitle>
-          <Badge
-            variant="outline"
-            className={`shrink-0 text-xs ${CATEGORY_COLORS[session.skill_category]}`}
-          >
+          <Badge variant="outline" className={`shrink-0 text-xs ${categoryClass}`}>
             {session.skill_category}
           </Badge>
         </div>
@@ -48,7 +53,7 @@ export function SessionCard({ session }: SessionCardProps) {
       <CardContent className="flex flex-col gap-3 pb-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Calendar size={15} className="shrink-0 text-primary" aria-hidden="true" />
-          <span>{formatDate(session.date)}</span>
+          <span>{formatDate(session.start_time)}</span>
         </div>
 
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -81,9 +86,7 @@ export function SessionCard({ session }: SessionCardProps) {
 
         <div className="pt-1">
           {session.price === 0 ? (
-            <span className="text-sm font-semibold text-emerald-600">
-              Free
-            </span>
+            <span className="text-sm font-semibold text-emerald-600">Free</span>
           ) : (
             <span className="text-sm font-semibold text-foreground">
               ${session.price.toFixed(2)}
@@ -105,5 +108,5 @@ export function SessionCard({ session }: SessionCardProps) {
         </Button>
       </CardFooter>
     </Card>
-  );
+  )
 }
