@@ -43,6 +43,7 @@ export function SessionDetailPage({
 
       try {
         const response = await api.getSession(sessionId)
+        console.log("[SkillShare Local] Session response:", response.data)
         if (isActive) {
           setSession(response.data)
         }
@@ -116,6 +117,32 @@ export function SessionDetailPage({
     Math.round((session.enrolled_count / session.capacity) * 100)
   )
 
+  const formatDate = (value: string) => {
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return value
+    return new Intl.DateTimeFormat(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }).format(parsed)
+  }
+
+  const formatTime = (value: string) => {
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return value
+    return new Intl.DateTimeFormat(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(parsed)
+  }
+
+  const formatTimeRange = (start: string, end: string) => {
+    const startLabel = formatTime(start)
+    const endLabel = formatTime(end)
+    if (!startLabel && !endLabel) return ""
+    return `${startLabel} - ${endLabel}`
+  }
+
   return (
     <div className="relative min-h-svh bg-background px-4 py-12">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -150,7 +177,9 @@ export function SessionDetailPage({
                   <CalendarDays className="mt-0.5 h-4 w-4 text-primary" />
                   <div>
                     <p className="text-sm font-medium text-foreground">Date</p>
-                    <p className="text-sm text-muted-foreground">{session.date}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDate(session.start_time)}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
@@ -158,7 +187,7 @@ export function SessionDetailPage({
                   <div>
                     <p className="text-sm font-medium text-foreground">Time</p>
                     <p className="text-sm text-muted-foreground">
-                      {session.start_time} - {session.end_time}
+                      {formatTimeRange(session.start_time, session.end_time)}
                     </p>
                   </div>
                 </div>

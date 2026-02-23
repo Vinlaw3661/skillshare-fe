@@ -23,6 +23,7 @@ import {
   MapPin,
   Sparkles,
   Users,
+  Copy,
 } from "lucide-react"
 
 const categoryOptions = [
@@ -42,16 +43,19 @@ const initialForm: SessionCreateRequest = {
   location: "",
   start_time: "",
   end_time: "",
-  date: "",
   capacity: 12,
   price: 0,
 }
 
 export function CreateSessionPage() {
   const [form, setForm] = useState<SessionCreateRequest>(initialForm)
+  const [sessionDate, setSessionDate] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [statusTone, setStatusTone] = useState<"success" | "error">("success")
+  const [createdSessionUrl, setCreatedSessionUrl] = useState<string | null>(null)
+  const [isCopied, setIsCopied] = useState(false)
+  const [copyError, setCopyError] = useState<string | null>(null)
 
   const updateField = <K extends keyof SessionCreateRequest>(
     key: K,
@@ -111,10 +115,19 @@ export function CreateSessionPage() {
     event.preventDefault()
     setStatusMessage(null)
     setStatusTone("success")
+    setCreatedSessionUrl(null)
+    setIsCopied(false)
+    setCopyError(null)
 
     if (!form.skill_category) {
       setStatusTone("error")
       setStatusMessage("Please choose a skill category before publishing.")
+      return
+    }
+
+    if (!sessionDate) {
+      setStatusTone("error")
+      setStatusMessage("Please select a session date before publishing.")
       return
     }
 
@@ -136,14 +149,18 @@ export function CreateSessionPage() {
 
       const payload: SessionCreateRequest = {
         ...form,
-        start_time: toDateTime(form.date, form.start_time),
-        end_time: toDateTime(form.date, form.end_time),
+        start_time: toDateTime(sessionDate, form.start_time),
+        end_time: toDateTime(sessionDate, form.end_time),
         capacity: Number.isFinite(form.capacity) ? form.capacity : 0,
         price: Number.isFinite(form.price) ? form.price : 0,
       }
 
-      await api.createSession(payload)
-      setStatusMessage("Session created. You can share the link with classmates.")
+      const response = await api.createSession(payload)
+      const sessionId = response.data.id
+      const origin = typeof window !== "undefined" ? window.location.origin : ""
+      setCreatedSessionUrl(`${origin}/sessions/${sessionId}`)
+      setStatusMessage("Session created. Share the link with classmates.")
+      setCopyError(null)
     } catch (error) {
       console.error(
         "[SkillShare Local] Failed to create session",
@@ -262,8 +279,8 @@ export function CreateSessionPage() {
                     <Input
                       id="date"
                       type="date"
-                      value={form.date}
-                      onChange={(event) => updateField("date", event.target.value)}
+                      value={sessionDate}
+                      onChange={(event) => setSessionDate(event.target.value)}
                       required
                     />
                   </div>
@@ -345,15 +362,85 @@ export function CreateSessionPage() {
                     )}
                   </Button>
                   {statusMessage ? (
-                    <span
-                      className={
-                        statusTone === "success"
-                          ? "text-sm text-primary"
-                          : "text-sm text-destructive"
-                      }
-                    >
-                      {statusMessage}
-                    </span>
+                    <div className="flex w-full flex-col gap-2 text-sm">
+                      <span
+                        className={
+                          statusTone === "success"
+                            ? "text-primary"
+                            : "text-destructive"
+                        }
+                      >
+                        {statusMessage}
+                      </span>
+                      {createdSessionUrl ? (
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-foreground">
+                          <a
+                            href={createdSessionUrl}
+                            className="break-all text-primary underline-offset-4 hover:underline"
+                          >
+                            {createdSessionUrl}
+                          </a>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1"
+                            onClick={async () => {
+                              try {
+                                setCopyError(null)
+                                const canUseClipboard =
+                                  typeof navigator !== "undefined" &&
+                                  !!navigator.clipboard?.writeText &&
+                                  typeof window !== "undefined" &&
+                                  window.isSecureContext
+
+                                if (canUseClipboard) {
+                                  await navigator.clipboard.writeText(createdSessionUrl)
+                                  setIsCopied(true)
+                                  setTimeout(() => setIsCopied(false), 2000)
+                                  return
+                                }
+
+                                if (typeof document !== "undefined") {
+                                  const textarea = document.createElement("textarea")
+                                  textarea.value = createdSessionUrl
+                                  textarea.setAttribute("readonly", "")
+                                  textarea.style.position = "absolute"
+                                  textarea.style.left = "-9999px"
+                                  document.body.appendChild(textarea)
+                                  textarea.select()
+                                  const copied = document.execCommand("copy")
+                                  document.body.removeChild(textarea)
+                                  if (copied) {
+                                    setIsCopied(true)
+                                    setTimeout(() => setIsCopied(false), 2000)
+                                    return
+                                  }
+                                }
+
+                                setCopyError(
+                                  "Copy is not supported here. Please copy the link manually."
+                                )
+                              } catch (copyError) {
+                                console.error(
+                                  "[SkillShare Local] Failed to copy session link",
+                                  copyError
+                                )
+                                setCopyError(
+                                  "Copy is not available. Please copy the link manually."
+                                )
+                              }
+                            }}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                            <span>{isCopied ? "Copied" : "Copy"}</span>
+                          </Button>
+                          {copyError ? (
+                            <span className="text-xs text-destructive">{copyError}</span>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
               </form>
@@ -386,7 +473,7 @@ export function CreateSessionPage() {
                 <div className="grid gap-3 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <CalendarDays className="h-4 w-4" />
-                    <span>{form.date || "Date"}</span>
+                    <span>{sessionDate || "Date"}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4" />
