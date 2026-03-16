@@ -5,9 +5,11 @@ import Link from "next/link"
 import {
   Configuration,
   EnrollmentsApi,
+  SessionsApi,
   UsersApi,
   type UserCreateResponse,
   type EnrollmentResponse,
+  type SessionCreateResponse,
 } from "@/api"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -25,6 +27,7 @@ import {
   Mail,
   MapPin,
   Pencil,
+  Trash2,
   UserRound,
   X,
 } from "lucide-react"
@@ -47,6 +50,12 @@ export function ProfilePage() {
   const [activeTab, setActiveTab] = useState<"upcoming" | "past" | "cancelled">("upcoming")
   const [cancellingId, setCancellingId] = useState<string | null>(null)
 
+  // Hosted sessions
+  const [hostedSessions, setHostedSessions] = useState<SessionCreateResponse[]>([])
+  const [isLoadingHosted, setIsLoadingHosted] = useState(true)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
   useEffect(() => {
     let isActive = true
 
@@ -62,18 +71,25 @@ export function ProfilePage() {
 
       try {
         const config = new Configuration({ accessToken: token })
-        const [userRes, enrollRes] = await Promise.all([
+        const [userRes, enrollRes, sessionsRes] = await Promise.all([
           new UsersApi(config).getUser(),
           new EnrollmentsApi(config).getMyEnrollmentsEnrollmentsMyEnrollmentsGet("all"),
+          new SessionsApi(config).listSessions(),
         ])
         if (isActive) {
-          setUser(userRes.data)
+          const me = userRes.data
+          setUser(me)
           setEditForm({
-            firstName: userRes.data.first_name,
-            lastName: userRes.data.last_name,
-            bio: userRes.data.bio ?? "",
+            firstName: me.first_name,
+            lastName: me.last_name,
+            bio: me.bio ?? "",
           })
           setEnrollments(enrollRes.data as unknown as EnrollmentResponse[])
+          setHostedSessions(
+            (sessionsRes.data as unknown as SessionCreateResponse[]).filter(
+              (s) => s.host_id === me.id
+            )
+          )
         }
       } catch (error) {
         if (isActive) {
@@ -87,6 +103,7 @@ export function ProfilePage() {
         if (isActive) {
           setIsLoading(false)
           setIsLoadingEnrollments(false)
+          setIsLoadingHosted(false)
         }
       }
     }
@@ -167,6 +184,21 @@ export function ProfilePage() {
       // non-fatal
     } finally {
       setCancellingId(null)
+    }
+  }
+
+  const handleDeleteSession = async (sessionId: string) => {
+    const token = localStorage.getItem("skillshare_jwt")
+    if (!token) return
+    setDeletingId(sessionId)
+    try {
+      await new SessionsApi(new Configuration({ accessToken: token })).deleteSession(sessionId)
+      setHostedSessions((prev) => prev.filter((s) => s.id !== sessionId))
+    } catch {
+      // non-fatal
+    } finally {
+      setDeletingId(null)
+      setConfirmDeleteId(null)
     }
   }
 
@@ -416,6 +448,103 @@ export function ProfilePage() {
             </Card>
           </div>
         </div>
+
+        {/* My sessions */}
+        <section className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="font-heading text-xl font-bold tracking-tight text-foreground">
+              My sessions
+            </h2>
+            <p className="text-sm text-muted-foreground">Sessions you're hosting.</p>
+          </div>
+
+          {isLoadingHosted ? (
+            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading sessions...
+            </div>
+          ) : hostedSessions.length === 0 ? (
+            <Card className="border-border/60">
+              <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                You haven't created any sessions yet.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {hostedSessions.map((session) => (
+                <Card key={session.id} className="border-border/60">
+                  <CardContent className="flex flex-wrap items-start justify-between gap-4 py-4">
+                    <div className="flex flex-col gap-1.5">
+                      <Link
+                        href={`/sessions/${session.id}`}
+                        className="font-medium text-foreground hover:underline"
+                      >
+                        {session.title}
+                      </Link>
+                      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          {formatDateTime(session.start_time)}
+                        </span>
+                        {session.location && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="h-3.5 w-3.5" />
+                            {session.location}
+                          </span>
+                        )}
+                        <Badge variant="secondary" className="text-xs">
+                          {session.status}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/sessions/${session.id}/edit`}>
+                          <Pencil className="h-3.5 w-3.5" />
+                          Edit
+                        </Link>
+                      </Button>
+                      {confirmDeleteId === session.id ? (
+                        <>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDeleteSession(session.id)}
+                            disabled={deletingId === session.id}
+                          >
+                            {deletingId === session.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              "Confirm"
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setConfirmDeleteId(null)}
+                            disabled={deletingId === session.id}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                          onClick={() => setConfirmDeleteId(session.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
 
         {/* My enrollments */}
         <section className="flex flex-col gap-4">
