@@ -12,7 +12,13 @@ jest.mock('next/link', () => {
 });
 
 describe('SessionCard Core Component', () => {
-  const sampleSession = MOCK_SESSIONS[0]; // Grab the first fake session to test
+  // Grab the fake session and attach Vinlaw's new required backend fields
+  const sampleSession = {
+    ...MOCK_SESSIONS[0],
+    host_id: "test-user-123",
+    status: "published",
+    created_at: new Date().toISOString()
+  } as any;
 
   it('renders the session title and category correctly', () => {
     render(<SessionCard session={sampleSession} />);
