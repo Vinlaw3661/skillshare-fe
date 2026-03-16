@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { RefreshCcw, Search } from "lucide-react"
+import { BookOpen, RefreshCcw, Search } from "lucide-react"
+import Link from "next/link"
 
 const extractErrorMessage = (error: unknown) => {
   const anyError = error as any
@@ -106,6 +107,16 @@ export function BrowseSessionsPage() {
 
   return (
     <div className="min-h-svh bg-background">
+      <nav className="mx-auto flex w-full max-w-7xl items-center px-4 py-6 sm:px-6 lg:px-8">
+        <Link href="/" className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <BookOpen className="h-4 w-4" />
+          </div>
+          <span className="font-heading text-lg font-bold tracking-tight text-foreground">
+            SkillShare Local
+          </span>
+        </Link>
+      </nav>
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-3">
           <Badge variant="secondary" className="w-fit">
