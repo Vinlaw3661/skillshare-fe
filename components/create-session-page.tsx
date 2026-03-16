@@ -25,6 +25,7 @@ import {
   Users,
   Copy,
 } from "lucide-react"
+import { Navbar } from "@/components/navbar"
 
 const categoryOptions = [
   "Career",
@@ -175,13 +176,15 @@ export function CreateSessionPage() {
   }
 
   return (
-    <div className="relative min-h-svh bg-background px-4 py-12">
+    <div className="relative min-h-svh bg-background">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-40 top-8 h-96 w-96 rounded-full bg-primary/10" />
         <div className="absolute -bottom-48 right-0 h-[30rem] w-[30rem] rounded-full bg-accent/60" />
       </div>
 
-      <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-8">
+      <Navbar />
+
+      <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">

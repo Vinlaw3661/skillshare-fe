@@ -1,8 +1,9 @@
 "use client"
 
+import Link from "next/link"
 import { useAuth } from "@/context/auth-context"
 import { LoginForm, AuthenticatedView } from "@/components/login-form"
-import { BookOpen, Lightbulb, Users, Calendar } from "lucide-react"
+import { ArrowLeft, BookOpen, Lightbulb, Users, Calendar } from "lucide-react"
 
 const features = [
   { icon: Lightbulb, text: "Learn from peers on campus" },
@@ -31,6 +32,15 @@ export function LoginPage() {
         <div className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-primary/5" />
         <div className="absolute -bottom-48 -right-48 h-[32rem] w-[32rem] rounded-full bg-accent/40" />
       </div>
+
+      {/* Back link */}
+      <Link
+        href="/"
+        className="absolute left-4 top-6 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground sm:left-6"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Home
+      </Link>
 
       {/* Content */}
       <div className="relative z-10 flex w-full max-w-md flex-col items-center gap-8">
