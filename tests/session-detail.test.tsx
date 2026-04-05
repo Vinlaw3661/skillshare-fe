@@ -26,6 +26,7 @@ const mockGetUser = jest.fn()
 const mockGetUserById = jest.fn()
 const mockGetEnrollees = jest.fn()
 const mockGetRatings = jest.fn()
+const mockCreateRating = jest.fn()
 const mockEnroll = jest.fn()
 const mockCancelEnrollment = jest.fn()
 const mockDeleteSession = jest.fn()
@@ -53,6 +54,7 @@ jest.mock('../api', () => ({
   RatingsApi: jest.fn().mockImplementation(() => ({
     getRatingsForSessionRatingsSessionSessionIdRatingsGet: (...args: any[]) =>
       mockGetRatings(...args),
+    createRatingRatingsCreateRatingPost: (...args: any[]) => mockCreateRating(...args),
   })),
 }))
 
@@ -73,6 +75,8 @@ const MOCK_SESSION = {
 
 const FULL_SESSION = { ...MOCK_SESSION, enrolled_count: 10, capacity: 10 }
 const HOST_SESSION = { ...MOCK_SESSION, host_id: 'current-user-id' }
+// start_time in the past so hasStarted === true
+const PAST_SESSION = { ...MOCK_SESSION, start_time: '2020-01-01T10:00:00.000Z', end_time: '2020-01-01T12:00:00.000Z' }
 
 beforeEach(() => {
   localStorage.clear()
@@ -82,6 +86,7 @@ beforeEach(() => {
   mockGetUserById.mockReset().mockResolvedValue({ data: { first_name: 'Test', last_name: 'Host' } })
   mockGetEnrollees.mockReset().mockResolvedValue({ data: { enrollees: [] } })
   mockGetRatings.mockReset().mockResolvedValue({ data: { average_rating: 0, total_ratings: 0, ratings: [] } })
+  mockCreateRating.mockReset().mockResolvedValue({ data: {} })
   mockEnroll.mockReset().mockResolvedValue({ data: {} })
   mockCancelEnrollment.mockReset().mockResolvedValue({ data: {} })
   mockDeleteSession.mockReset().mockResolvedValue({ data: {} })
@@ -203,6 +208,156 @@ describe('SessionDetailPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Delete failed')).toBeInTheDocument()
+    })
+  })
+})
+
+// ─────────────────────────────────────────────
+// Ratings
+// ─────────────────────────────────────────────
+describe('Ratings', () => {
+  it('displays existing ratings with average score, total count, and reviewer name', async () => {
+    mockGetRatings.mockResolvedValue({
+      data: {
+        average_rating: 4.5,
+        total_ratings: 2,
+        ratings: [
+          { id: 'r1', reviewer_id: 'other-user', reviewer_name: 'Alice', rating: 5, comment: 'Great!' },
+          { id: 'r2', reviewer_id: 'another-user', reviewer_name: 'Bob', rating: 4, comment: null },
+        ],
+      },
+    })
+
+    render(<SessionDetailPage sessionId="sess-test" initialSession={MOCK_SESSION as any} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/4\.5\s*\/\s*5/)).toBeInTheDocument()
+      expect(screen.getByText(/2\s*ratings/i)).toBeInTheDocument()
+      expect(screen.getByText('Alice')).toBeInTheDocument()
+      expect(screen.getByText('Bob')).toBeInTheDocument()
+    })
+  })
+
+  it('shows "Leave a rating" form when the user is enrolled and the session has started', async () => {
+    localStorage.setItem('skillshare_jwt', 'test-token')
+    mockGetUser.mockResolvedValue({ data: { id: 'current-user-id' } })
+    mockCheckEnrollment.mockResolvedValue({ data: { enrolled: true } })
+
+    render(<SessionDetailPage sessionId="sess-test" initialSession={PAST_SESSION as any} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/leave a rating/i)).toBeInTheDocument()
+    })
+  })
+
+  it('hides the "Leave a rating" form when the user has already rated the session', async () => {
+    localStorage.setItem('skillshare_jwt', 'test-token')
+    mockGetUser.mockResolvedValue({ data: { id: 'current-user-id' } })
+    mockCheckEnrollment.mockResolvedValue({ data: { enrolled: true } })
+    mockGetRatings.mockResolvedValue({
+      data: {
+        average_rating: 5,
+        total_ratings: 1,
+        ratings: [{ id: 'r1', reviewer_id: 'current-user-id', reviewer_name: 'Me', rating: 5 }],
+      },
+    })
+
+    render(<SessionDetailPage sessionId="sess-test" initialSession={PAST_SESSION as any} />)
+
+    await waitFor(() => {
+      expect(screen.queryByText(/leave a rating/i)).not.toBeInTheDocument()
+    })
+  })
+
+  it('does not show the rating form when the session has not yet started', async () => {
+    localStorage.setItem('skillshare_jwt', 'test-token')
+    mockGetUser.mockResolvedValue({ data: { id: 'current-user-id' } })
+    mockCheckEnrollment.mockResolvedValue({ data: { enrolled: true } })
+
+    render(<SessionDetailPage sessionId="sess-test" initialSession={MOCK_SESSION as any} />)
+
+    await waitFor(() => {
+      expect(screen.queryByText(/leave a rating/i)).not.toBeInTheDocument()
+    })
+  })
+
+  it('calls createRating with the correct session_id, rating, and comment on submit', async () => {
+    localStorage.setItem('skillshare_jwt', 'test-token')
+    mockGetUser.mockResolvedValue({ data: { id: 'current-user-id' } })
+    mockCheckEnrollment.mockResolvedValue({ data: { enrolled: true } })
+
+    render(<SessionDetailPage sessionId="sess-test" initialSession={PAST_SESSION as any} />)
+
+    await waitFor(() => expect(screen.getByText(/leave a rating/i)).toBeInTheDocument())
+
+    // Select 3 stars (click the star button with aria-label "Rate 3")
+    fireEvent.click(screen.getByRole('button', { name: /rate 3/i }))
+
+    fireEvent.change(screen.getByPlaceholderText(/add a comment/i), {
+      target: { value: 'Solid session' },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /submit rating/i }))
+
+    await waitFor(() => {
+      expect(mockCreateRating).toHaveBeenCalledWith(
+        expect.objectContaining({
+          session_id: 'sess-test',
+          rating: 3,
+          comment: 'Solid session',
+        })
+      )
+    })
+  })
+
+  it('shows "Rating submitted. Thanks for the feedback!" after a successful submission', async () => {
+    localStorage.setItem('skillshare_jwt', 'test-token')
+    mockGetUser.mockResolvedValue({ data: { id: 'current-user-id' } })
+    mockCheckEnrollment.mockResolvedValue({ data: { enrolled: true } })
+
+    render(<SessionDetailPage sessionId="sess-test" initialSession={PAST_SESSION as any} />)
+
+    await waitFor(() => expect(screen.getByText(/leave a rating/i)).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /submit rating/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/rating submitted\. thanks for the feedback/i)).toBeInTheDocument()
+    })
+  })
+
+  it('hides the rating form after a successful submission', async () => {
+    localStorage.setItem('skillshare_jwt', 'test-token')
+    mockGetUser.mockResolvedValue({ data: { id: 'current-user-id' } })
+    mockCheckEnrollment.mockResolvedValue({ data: { enrolled: true } })
+
+    render(<SessionDetailPage sessionId="sess-test" initialSession={PAST_SESSION as any} />)
+
+    await waitFor(() => expect(screen.getByText(/leave a rating/i)).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /submit rating/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByText(/leave a rating/i)).not.toBeInTheDocument()
+    })
+  })
+
+  it('shows an error message when the createRating API call fails', async () => {
+    localStorage.setItem('skillshare_jwt', 'test-token')
+    mockGetUser.mockResolvedValue({ data: { id: 'current-user-id' } })
+    mockCheckEnrollment.mockResolvedValue({ data: { enrolled: true } })
+    mockCreateRating.mockRejectedValue({
+      response: { data: { message: 'Rating failed' } },
+    })
+
+    render(<SessionDetailPage sessionId="sess-test" initialSession={PAST_SESSION as any} />)
+
+    await waitFor(() => expect(screen.getByText(/leave a rating/i)).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /submit rating/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Rating failed')).toBeInTheDocument()
     })
   })
 })
